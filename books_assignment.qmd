@@ -1,0 +1,128 @@
+---
+title: "Working with HTML and JSON: Three Statistics Books"
+author: "Professor Reginald Dorcely"
+date: "2026-10-18"
+format:
+  html:
+    toc: true
+    code-fold: false
+    self-contained: true
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## Introduction
+
+This warm-up assignment explores how the same information can be stored in HTML and JSON and converted into R data frames. The selected subject is **statistics**, and the three books include a textbook written by multiple authors. The extra attributes are **publication year, publisher, and ISBN-13**.
+
+## Research question and approach
+
+**Question:** Do two manually prepared files, `books.html` and `books.json`, yield identical data frames after importing and standardizing their formats?
+
+**Approach:** I recorded the same book details in an HTML table and a JSON array. In R, I use `rvest` to read the table and `jsonlite` to read the JSON, convert the authors array to a single consistently delimited string, align column types and order, and compare the results using `identical()` and `all.equal()`.
+
+## Selected books
+
+1. *OpenIntro Statistics* — David M. Diez, Christopher D. Barr, and Mine Çetinkaya-Rundel (2019; OpenIntro, Inc.).
+2. *The Art of Statistics: How to Learn from Data* — David Spiegelhalter (2019; Basic Books).
+3. *Naked Statistics: Stripping the Dread from the Data* — Charles Wheelan (2013; W. W. Norton & Company).
+
+## Set up packages and file locations
+
+Install these packages once if needed: `install.packages(c("rvest", "jsonlite", "knitr"))`.
+
+The code below works with files placed in the **same folder as this Quarto file**. To read from publicly accessible files on GitHub, replace the `base_url` with your own raw GitHub URL and set `use_web <- TRUE`. GitHub's raw file links must be public.
+
+```{r}
+#| label: setup
+library(rvest)
+library(jsonlite)
+library(knitr)
+
+use_web <- FALSE
+base_url <- "https://raw.githubusercontent.com/YOUR_USERNAME/books-html-json/main/"
+html_source <- if (use_web) paste0(base_url, "books.html") else "books.html"
+json_source <- if (use_web) paste0(base_url, "books.json") else "books.json"
+```
+
+## Step 1: Read HTML into a data frame
+
+An HTML file organizes the book records as rows in a `<table>` element. `rvest::html_table()` extracts the table as an R data frame.
+
+```{r}
+#| label: read-html
+html_doc <- read_html(html_source)
+html_books <- html_doc |>
+  html_element("table#books") |>
+  html_table(convert = FALSE) |>
+  as.data.frame(stringsAsFactors = FALSE)
+
+html_books$year <- as.integer(html_books$year)
+html_books$isbn <- as.character(html_books$isbn) # ISBN is an identifier, not a measurement
+kable(html_books, caption = "Books imported from HTML")
+```
+
+## Step 2: Read JSON into a separate data frame
+
+JSON stores records as objects inside an array. Each book's `authors` field is an array, so I join author names with a semicolon and space to match the HTML table.
+
+```{r}
+#| label: read-json
+json_records <- fromJSON(json_source, simplifyVector = FALSE)
+json_books <- data.frame(
+  title = vapply(json_records, function(x) x$title, character(1)),
+  authors = vapply(json_records, function(x) paste(unlist(x$authors), collapse = "; "), character(1)),
+  year = vapply(json_records, function(x) as.integer(x$year), integer(1)),
+  publisher = vapply(json_records, function(x) x$publisher, character(1)),
+  isbn = vapply(json_records, function(x) x$isbn, character(1)),
+  stringsAsFactors = FALSE
+)
+kable(json_books, caption = "Books imported from JSON")
+```
+
+## Step 3: Compare the data frames
+
+`identical()` is strict: matching values alone are insufficient if column types, column order, or attributes differ. I check both strict identity and approximate equality diagnostics.
+
+```{r}
+#| label: compare
+expected_columns <- c("title", "authors", "year", "publisher", "isbn")
+html_books <- html_books[, expected_columns, drop = FALSE]
+json_books <- json_books[, expected_columns, drop = FALSE]
+rownames(html_books) <- NULL
+rownames(json_books) <- NULL
+
+same <- identical(html_books, json_books)
+cat("Are the data frames identical?", same, "\n")
+cat("all.equal() result:", paste(all.equal(html_books, json_books), collapse = "; "), "\n")
+cat("HTML dimensions:", nrow(html_books), "rows x", ncol(html_books), "columns\n")
+cat("JSON dimensions:", nrow(json_books), "rows x", ncol(json_books), "columns\n")
+
+stopifnot(same)
+```
+
+## Interpretation
+
+After converting the JSON authors arrays to the same semicolon-separated strings used in HTML, converting publication years to integers, and keeping ISBNs as text, the two data frames are **identical**. Both contain **three rows and five columns**. This demonstrates how different data formats can represent the same information and produce equivalent analysis-ready datasets when their structures and data types are aligned.
+
+## Challenges and reflection
+
+The primary challenge is that HTML stores author names in a table cell, whereas JSON naturally stores them in an array. Another consideration is preserving ISBNs as text rather than treating them as quantities. This practice reinforces the importance of examining data types before comparing or merging datasets. I can apply the same workflow later when collecting research data through HTML web scraping and JSON web APIs.
+
+## Source notes
+
+Book publication details were checked using publication and library records:
+
+- [OpenIntro Statistics — University of Edinburgh](https://www.research.ed.ac.uk/en/publications/openintro-statistics-2/)
+- [The Art of Statistics — Google Books](https://books.google.com/books/about/The_Art_of_Statistics.html?id=04-FDwAAQBAJ)
+- [Naked Statistics — Indiana University library catalog](https://iucat.iu.edu/catalog/12009559)
+
+## Publishing to RPubs
+
+1. Upload both `books.html` and `books.json` to a **public** GitHub repository (for example, `books-html-json`).
+2. Edit the `base_url` above to use your GitHub username and repository. Set `use_web <- TRUE` so the report reads both files via public URLs.
+3. Render this `.qmd` to HTML in RStudio with Quarto. Verify the comparison prints `TRUE`.
+4. In RStudio's **Viewer**, choose **Publish** and select **RPubs** (or run `rsconnect::rpubsUpload()` on the rendered HTML if using that workflow).
+5. Submit the RPubs link and the two public raw GitHub file links. RPubs publishes the rendered HTML report; it does not automatically host the source `.html` and `.json` data files separately.

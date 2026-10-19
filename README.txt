@@ -1,0 +1,1 @@
+Open books_assignment.qmd in RStudio/Quarto. Keep books.html and books.json in the same folder. Install R packages rvest, jsonlite, knitr; render. For the published run, upload both data files to a public GitHub repository and switch use_web to TRUE with your raw GitHub base URL. Then publish rendered HTML to RPubs.
